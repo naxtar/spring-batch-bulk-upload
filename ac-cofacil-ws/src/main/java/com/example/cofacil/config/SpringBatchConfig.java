@@ -1,15 +1,21 @@
 package com.example.cofacil.config;
 
+import org.springframework.batch.core.Job;
+import org.springframework.batch.core.Step;
 import org.springframework.batch.core.configuration.annotation.EnableBatchProcessing;
 import org.springframework.batch.core.configuration.annotation.JobBuilderFactory;
 import org.springframework.batch.core.configuration.annotation.StepBuilderFactory;
+import org.springframework.batch.item.data.RepositoryItemWriter;
 import org.springframework.batch.item.file.FlatFileItemReader;
 import org.springframework.batch.item.file.LineMapper;
 import org.springframework.batch.item.file.mapping.BeanWrapperFieldSetMapper;
 import org.springframework.batch.item.file.mapping.DefaultLineMapper;
 import org.springframework.batch.item.file.transform.DelimitedLineTokenizer;
+import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.core.io.FileSystemResource;
+import org.springframework.core.task.SimpleAsyncTaskExecutor;
+import org.springframework.core.task.TaskExecutor;
 
 import com.example.cofacil.entity.Customer;
 import com.example.cofacil.repository.CustomerRepository;
@@ -27,7 +33,7 @@ public class SpringBatchConfig {
 	
 	private CustomerRepository customerRepository;
 	
-	
+	@Bean
 	public FlatFileItemReader<Customer> reader(){
 		FlatFileItemReader itemReader=new FlatFileItemReader();
 		
@@ -58,4 +64,46 @@ public class SpringBatchConfig {
 	     return lineMapper;
 	     
 	}
+	
+	@Bean
+	public CustomerProcessor processor() {
+		return new CustomerProcessor();
+	}
+	
+	@Bean
+	public RepositoryItemWriter<Customer> writer(){
+		RepositoryItemWriter<Customer> writer=new RepositoryItemWriter<>();
+		writer.setRepository(customerRepository);
+		writer.setMethodName("save");
+		return writer;
+	}
+	
+	//Definimos el objectStep
+	
+	@Bean
+	public Step step1() {
+		return stepBuilderFactory.get("csv-step")
+				.<Customer,Customer>chunk(50)
+				.reader(reader())
+				.processor(processor())
+				.writer(writer())
+				//.taskExecutor(taskExecutor())
+				.build();
+	}
+	
+	@Bean
+	public Job job() {
+		return jobBuilderFactory.get("importCustomers")
+				.flow(step1())
+				.end().build();
+	}
+	
+	//Asyncrono
+//	 @Bean
+//	    public TaskExecutor taskExecutor() {
+//	        SimpleAsyncTaskExecutor asyncTaskExecutor = new SimpleAsyncTaskExecutor();
+//	        asyncTaskExecutor.setConcurrencyLimit(10);
+//	        return asyncTaskExecutor;
+//	    }
+	
 }
